@@ -1805,12 +1805,19 @@ ${systemPrompt}
           ? "Default max turns (0 = unlimited)"
           : "Grace turns (1+)";
 
-      const input = await ctx.ui.input(label, current);
-
-      if (input != null && input.trim() !== "") {
-        applyValue(result, input.trim());
-        // Re-show settings with updated values
-        await showSettings(ctx);
+      // Loop until user enters a valid integer or cancels (Esc / null).
+      // Silently trims whitespace; rejects non-numeric input by re-prompting.
+      let input: string | undefined = await ctx.ui.input(label, current);
+      while (input != null) {
+        const trimmed = input.trim();
+        const n = Number(trimmed);
+        if (trimmed !== "" && Number.isInteger(n)) {
+          applyValue(result, String(n));
+          await showSettings(ctx);
+          return;
+        }
+        // Invalid — re-prompt with the user's last entry so they can edit it
+        input = await ctx.ui.input(label, trimmed);
       }
     }
   }
