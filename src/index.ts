@@ -1669,24 +1669,36 @@ ${systemPrompt}
   }
 
   async function showSettings(ctx: ExtensionCommandContext) {
+    // Build values arrays — always include current value so cycling works even if user has non-standard value
+    const mc = manager.getMaxConcurrent();
+    const dmt = getDefaultMaxTurns() ?? 0;
+    const gt = getGraceTurns();
+
+    const mcValues = [...new Set(["1", "2", "4", "8", "16", "32", "64", String(mc)])].sort((a, b) => Number(a) - Number(b));
+    const dmtValues = [...new Set(["0", "10", "25", "50", "100", "200", "500", String(dmt)])].sort((a, b) => Number(a) - Number(b));
+    const gtValues = [...new Set(["1", "2", "3", "5", "10", "20", String(gt)])].sort((a, b) => Number(a) - Number(b));
+
     const items: SettingItem[] = [
       {
         id: "maxConcurrent",
         label: "Max concurrency",
-        description: "Max concurrent background agents (press Enter to change)",
-        currentValue: String(manager.getMaxConcurrent()),
+        description: "Max concurrent background agents (Space/Enter to cycle)",
+        currentValue: String(mc),
+        values: mcValues,
       },
       {
         id: "defaultMaxTurns",
         label: "Default max turns",
-        description: "Default max turns before wrap-up (0 = unlimited, Enter to change)",
-        currentValue: String(getDefaultMaxTurns() ?? 0),
+        description: "Default max turns before wrap-up (0 = unlimited, Space/Enter to cycle)",
+        currentValue: String(dmt),
+        values: dmtValues,
       },
       {
         id: "graceTurns",
         label: "Grace turns",
-        description: "Grace turns after wrap-up steer (Enter to change)",
-        currentValue: String(getGraceTurns()),
+        description: "Grace turns after wrap-up steer (Space/Enter to cycle)",
+        currentValue: String(gt),
+        values: gtValues,
       },
       {
         id: "joinMode",
@@ -1711,55 +1723,34 @@ ${systemPrompt}
         items,
         items.length + 2,
         getSettingsListTheme(),
-        async (id, newValue) => {
+        (id, newValue) => {
           if (id === "maxConcurrent") {
-            const val = await ctx.ui.input("Max concurrent background agents", newValue);
-            if (val) {
-              const n = parseInt(val, 10);
-              if (n >= 1) {
-                manager.setMaxConcurrent(n);
-                list.updateValue(id, String(n));
-                notifyApplied(ctx, `Max concurrency set to ${n}`);
-              } else {
-                ctx.ui.notify("Must be a positive integer.", "warning");
-              }
+            const n = parseInt(newValue, 10);
+            if (n >= 1) {
+              manager.setMaxConcurrent(n);
+              notifyApplied(ctx, `Max concurrency set to ${n}`);
             }
           } else if (id === "defaultMaxTurns") {
-            const val = await ctx.ui.input("Default max turns (0 = unlimited)", newValue);
-            if (val) {
-              const n = parseInt(val, 10);
-              if (n === 0) {
-                setDefaultMaxTurns(undefined);
-                list.updateValue(id, "0");
-                notifyApplied(ctx, "Default max turns set to unlimited");
-              } else if (n >= 1) {
-                setDefaultMaxTurns(n);
-                list.updateValue(id, String(n));
-                notifyApplied(ctx, `Default max turns set to ${n}`);
-              } else {
-                ctx.ui.notify("Must be 0 (unlimited) or a positive integer.", "warning");
-              }
+            const n = parseInt(newValue, 10);
+            if (n === 0) {
+              setDefaultMaxTurns(undefined);
+              notifyApplied(ctx, "Default max turns set to unlimited");
+            } else if (n >= 1) {
+              setDefaultMaxTurns(n);
+              notifyApplied(ctx, `Default max turns set to ${n}`);
             }
           } else if (id === "graceTurns") {
-            const val = await ctx.ui.input("Grace turns after wrap-up steer", newValue);
-            if (val) {
-              const n = parseInt(val, 10);
-              if (n >= 1) {
-                setGraceTurns(n);
-                list.updateValue(id, String(n));
-                notifyApplied(ctx, `Grace turns set to ${n}`);
-              } else {
-                ctx.ui.notify("Must be a positive integer.", "warning");
-              }
+            const n = parseInt(newValue, 10);
+            if (n >= 1) {
+              setGraceTurns(n);
+              notifyApplied(ctx, `Grace turns set to ${n}`);
             }
           } else if (id === "joinMode") {
             setDefaultJoinMode(newValue as JoinMode);
-            list.updateValue("joinMode", newValue);
             notifyApplied(ctx, `Default join mode set to ${newValue}`);
           } else if (id === "scopeModels") {
             const enabled = newValue === "on";
             setScopeModelsEnabled(enabled);
-            list.updateValue("scopeModels", newValue);
             notifyApplied(ctx, `Scope models ${enabled ? "enabled" : "disabled"}`);
           }
         },
