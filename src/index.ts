@@ -1748,9 +1748,9 @@ ${systemPrompt}
     }
 
     let list: SettingsList;
-    // Tracks the index of the last item cycled via Space.
-    // Enter reads this to know which numeric field to prompt for.
-    let lastCycledIdx = -1;
+    // Track current selection index directly (SettingsList doesn't expose it).
+    // Updated on arrow keys so Enter knows which field is selected immediately.
+    let currentIndex = 0;
 
     const result = await ctx.ui.custom<string | undefined>((_tui, _theme, _kb, done) => {
       const items = buildItems();
@@ -1760,7 +1760,6 @@ ${systemPrompt}
         items.length + 2,
         getSettingsListTheme(),
         (id, newValue) => {
-          lastCycledIdx = items.findIndex((it) => it.id === id);
           applyValue(id, newValue);
         },
         () => done(undefined as undefined),
@@ -1775,9 +1774,16 @@ ${systemPrompt}
         render: (w: number) => container.render(w),
         invalidate: () => container.invalidate(),
         handleInput: (data: string) => {
+          // Track navigation so Enter knows the current field
+          if (matchesKey(data, "up")) {
+            currentIndex = Math.max(0, currentIndex - 1);
+          } else if (matchesKey(data, "down")) {
+            currentIndex = Math.min(items.length - 1, currentIndex + 1);
+          }
+
           // Enter on numeric field → close and prompt for typed input
-          if (matchesKey(data, Key.enter) && lastCycledIdx >= 0 && NUMERIC_IDS.has(items[lastCycledIdx].id)) {
-            done(items[lastCycledIdx].id);
+          if (matchesKey(data, Key.enter) && NUMERIC_IDS.has(items[currentIndex].id)) {
+            done(items[currentIndex].id);
             return;
           }
           list.handleInput?.(data);
