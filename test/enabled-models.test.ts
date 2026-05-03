@@ -16,9 +16,6 @@ const MODELS = [
 
 function makeRegistry(models = MODELS, available?: typeof MODELS): ModelRegistryRef {
   return {
-    find(provider: string, modelId: string) {
-      return models.find(m => m.provider === provider && m.id === modelId);
-    },
     getAll() { return models; },
     getAvailable: available ? () => available : undefined,
   };
@@ -51,9 +48,9 @@ describe("readEnabledModels", () => {
 
   it("returns enabledModels array", () => {
     writeFileSync(join(agentDir, "settings.json"), JSON.stringify({
-      enabledModels: ["anthropic/*", "google/gemma-4-31b-it"],
+      enabledModels: ["anthropic/claude-sonnet-4-6", "google/gemma-4-31b-it"],
     }));
-    expect(readEnabledModels()).toEqual(["anthropic/*", "google/gemma-4-31b-it"]);
+    expect(readEnabledModels()).toEqual(["anthropic/claude-sonnet-4-6", "google/gemma-4-31b-it"]);
   });
 
   it("returns undefined for corrupt JSON", () => {
@@ -62,7 +59,7 @@ describe("readEnabledModels", () => {
   });
 
   it("returns undefined when enabledModels is not an array", () => {
-    writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ enabledModels: "anthropic/*" }));
+    writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ enabledModels: "anthropic/claude-sonnet-4-6" }));
     expect(readEnabledModels()).toBeUndefined();
   });
 });
@@ -78,8 +75,8 @@ describe("resolveEnabledModels", () => {
   });
 
   it("skips empty string patterns", () => {
-    const result = resolveEnabledModels(["", "anthropic/*"], makeRegistry());
-    // Empty string should not match all models — only anthropic/* should match
+    const result = resolveEnabledModels(["", "anthropic/claude-haiku-4-5", "anthropic/claude-sonnet-4-6"], makeRegistry());
+    // Empty string should not match — only exact patterns should match
     expect(result!.size).toBe(2);
   });
 
@@ -90,7 +87,7 @@ describe("resolveEnabledModels", () => {
 
   it("returns undefined when getAvailable returns empty array", () => {
     const result = resolveEnabledModels(
-      ["anthropic/*"],
+      ["anthropic/claude-haiku-4-5"],
       makeRegistry(MODELS, []),
     );
     expect(result).toBeUndefined();
@@ -98,10 +95,10 @@ describe("resolveEnabledModels", () => {
 
   it("deduplicates duplicate patterns", () => {
     const result = resolveEnabledModels(
-      ["anthropic/*", "anthropic/*"],
+      ["anthropic/claude-haiku-4-5", "anthropic/claude-haiku-4-5"],
       makeRegistry(),
     );
-    expect(result!.size).toBe(2); // same as single entry
+    expect(result!.size).toBe(1); // duplicate resolves to one entry
   });
 
   describe("exact provider/modelId", () => {
@@ -124,51 +121,30 @@ describe("resolveEnabledModels", () => {
     });
   });
 
-  describe("bare modelId", () => {
-    it("resolves bare id to lowercase key", () => {
+  describe("no bare modelId or fuzzy matching", () => {
+    it("returns undefined for bare id (pi always writes provider/modelId)", () => {
       const result = resolveEnabledModels(["speed"], makeRegistry());
-      expect(result).toEqual(new Set(["vllm/speed"]));
+      expect(result).toBeUndefined();
     });
-  });
 
-  describe("no fuzzy matching", () => {
-    it("returns undefined for bare substring patterns (pi never writes these)", () => {
+    it("returns undefined for bare substring patterns", () => {
       const result = resolveEnabledModels(["Qwen"], makeRegistry());
       expect(result).toBeUndefined();
     });
   });
 
-  describe("glob match", () => {
-    it("matches provider/* glob", () => {
-      const result = resolveEnabledModels(["anthropic/*"], makeRegistry());
-      expect(result!.has("anthropic/claude-haiku-4-5".toLowerCase())).toBe(true);
-      expect(result!.has("anthropic/claude-sonnet-4-6".toLowerCase())).toBe(true);
-      expect(result!.has("google/gemma-4-31b-it".toLowerCase())).toBe(false);
-    });
 
-    it("matches wildcard in id", () => {
-      const result = resolveEnabledModels(["*Qwen*"], makeRegistry());
-      expect(result!.size).toBe(2);
-    });
-
-    it("matches against model id only (no provider prefix)", () => {
-      // "*sonnet*" should match claude-sonnet-4-6 via id-only match
-      const result = resolveEnabledModels(["*sonnet*"], makeRegistry());
-      expect(result!.has("anthropic/claude-sonnet-4-6".toLowerCase())).toBe(true);
-      expect(result!.has("anthropic/claude-haiku-4-5".toLowerCase())).toBe(false);
-    });
-  });
 
   describe("mixed patterns", () => {
-    it("combines exact and glob in one call", () => {
+    it("combines multiple exact provider/modelId in one call", () => {
       const result = resolveEnabledModels(
-        ["google/gemma-4-31b-it", "anthropic/*", "speed"],
+        ["google/gemma-4-31b-it", "anthropic/claude-haiku-4-5", "anthropic/claude-sonnet-4-6"],
         makeRegistry(),
       );
       expect(result!.has("google/gemma-4-31b-it".toLowerCase())).toBe(true);
       expect(result!.has("anthropic/claude-haiku-4-5".toLowerCase())).toBe(true);
       expect(result!.has("anthropic/claude-sonnet-4-6".toLowerCase())).toBe(true);
-      expect(result!.has("vllm/speed".toLowerCase())).toBe(true);
+      expect(result!.has("vllm/speed".toLowerCase())).toBe(false);
       expect(result!.has("llama-swap/qwen3.6-35b-a3b-ud-iq4_nl-mmproj:precise".toLowerCase())).toBe(false);
     });
   });
@@ -177,10 +153,10 @@ describe("resolveEnabledModels", () => {
     it("resolves only against available models when getAvailable present", () => {
       const available = [MODELS[0], MODELS[4]]; // google + haiku only
       const result = resolveEnabledModels(
-        ["anthropic/*", "google/*"],
+        ["anthropic/claude-haiku-4-5", "anthropic/claude-sonnet-4-6", "google/gemma-4-31b-it"],
         makeRegistry(MODELS, available),
       );
-      // anthropic/* matches nothing (haiku is only available anthropic model, glob matches haiku)
+      // haiku and google are available; sonnet is not
       expect(result!.has("anthropic/claude-haiku-4-5".toLowerCase())).toBe(true);
       expect(result!.has("anthropic/claude-sonnet-4-6".toLowerCase())).toBe(false); // not available
       expect(result!.has("google/gemma-4-31b-it".toLowerCase())).toBe(true);
