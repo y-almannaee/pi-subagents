@@ -23,7 +23,13 @@
   "peerDependencies": {
     "@mariozechner/pi-ai": ">=0.70.5",
     "@mariozechner/pi-coding-agent": ">=0.70.5",
-    "@mariozechner/pi-tui": ">=0.70.5"
+    "@mariozechner/pi-tui": ">=0.70.5",
+    "minimatch": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "minimatch": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49"
@@ -39,6 +45,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.5",
+    "@types/minimatch": "^5.1.0",
     "@types/node": "^25.5.0",
     "typescript": "^6.0.0",
     "vitest": "^4.0.18"
